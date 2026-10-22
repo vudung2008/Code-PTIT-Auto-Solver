@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Code PTIT Auto Solver",
+  "version": "1.0.0",
+  "description": "Tự động giải bài tập trên Code PTIT sử dụng Gemini API",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*/courses*"],
+      "js": ["content-courses.js", "list_manager.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": ["*://*/submit/*"],
+      "js": ["content-submit.js", "problem_solver.js"],
+      "run_at": "document_end"
+    }
+  ]
+}
