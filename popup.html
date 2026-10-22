@@ -157,6 +157,20 @@
       box-shadow: 0 4px 12px rgba(255, 71, 87, 0.4);
     }
 
+    .btn-toggle {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-toggle:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-toggle.off {
+      background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+    }
+
     .terminal {
       background: #0a0e1a;
       border: 1px solid #1a2332;
@@ -347,6 +361,13 @@
       <div class="btn-group">
         <button class="btn-start" id="startBtn">▶ Bắt đầu Auto Solve</button>
         <button class="btn-stop" id="stopBtn">🛑 Dừng</button>
+      </div>
+      
+      <div class="btn-group" style="margin-top: 12px;">
+        <button class="btn-toggle" id="toggleUIBtn">
+          <span id="toggleIcon">👁️</span>
+          <span id="toggleText">Ẩn UI Nổi</span>
+        </button>
       </div>
     </div>
 

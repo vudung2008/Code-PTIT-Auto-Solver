@@ -49,7 +49,7 @@ async function solveWithOmniroute(prompt, config) {
   const url = `${baseUrl.replace(/\/$/, '')}/v1/chat/completions`;
   const model = config.model || 'flash 3.8';
   
-  broadcastLog(`🤖 Gọi API Omniroute với model: ${model}`, 'info');
+  // Không log chi tiết API call
   
   const requestBody = {
     model: model,
@@ -67,8 +67,6 @@ async function solveWithOmniroute(prompt, config) {
   };
   
   try {
-    broadcastLog(`📡 Đang gửi request đến ${baseUrl}...`, 'info');
-    
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -80,8 +78,7 @@ async function solveWithOmniroute(prompt, config) {
     
     if (!response.ok) {
       const errorData = await response.text();
-      broadcastLog(`❌ API Error: ${response.status} - ${errorData}`, 'error');
-      throw new Error(`API Error: ${response.statusText}`);
+      throw new Error(`API Error ${response.status}`);
     }
     
     const data = await response.json();
@@ -93,11 +90,9 @@ async function solveWithOmniroute(prompt, config) {
     code = code.replace(/```\s*/g, '');
     code = code.trim();
     
-    broadcastLog(`✅ API trả về code thành công (${code.length} ký tự)`, 'success');
     return code;
     
   } catch (error) {
-    broadcastLog(`❌ Lỗi khi gọi API: ${error.message}`, 'error');
     throw error;
   }
 }
@@ -107,7 +102,7 @@ async function solveWithOmniroute(prompt, config) {
 async function solveWithGemini(prompt, apiKey) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
   
-  broadcastLog('🤖 Gọi Gemini API (fallback mode)', 'info');
+  // Không log chi tiết API call
   
   const systemPrompt = 'Bạn là chuyên gia lập trình C. Dựa vào đề bài, hãy viết mã nguồn C chuẩn. TUYỆT ĐỐI CHỈ trả về mã nguồn thô (raw code). Không dùng thẻ markdown ```c, không giải thích.';
   
@@ -128,8 +123,6 @@ async function solveWithGemini(prompt, apiKey) {
   };
   
   try {
-    broadcastLog('📡 Đang gửi request đến Gemini API...', 'info');
-    
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -140,8 +133,7 @@ async function solveWithGemini(prompt, apiKey) {
     
     if (!response.ok) {
       const errorData = await response.json();
-      broadcastLog(`❌ Gemini API Error: ${errorData.error?.message}`, 'error');
-      throw new Error(`API Error: ${errorData.error?.message || response.statusText}`);
+      throw new Error(`Gemini API Error ${response.status}`);
     }
     
     const data = await response.json();
@@ -153,11 +145,9 @@ async function solveWithGemini(prompt, apiKey) {
     code = code.replace(/```\s*/g, '');
     code = code.trim();
     
-    broadcastLog(`✅ Gemini API trả về code thành công (${code.length} ký tự)`, 'success');
     return code;
     
   } catch (error) {
-    broadcastLog(`❌ Lỗi Gemini API: ${error.message}`, 'error');
     throw error;
   }
 }
@@ -168,25 +158,39 @@ async function processNextTask() {
   const data = await chrome.storage.local.get(['pendingTasks', 'isAutoSolving']);
   
   if (!data.isAutoSolving || !data.pendingTasks || data.pendingTasks.length === 0) {
-    broadcastLog('⏸️ Không còn bài tập nào hoặc đã tắt chế độ auto-solve', 'warning');
     await chrome.storage.local.set({ 
       currentStatus: 'Đã hoàn thành tất cả',
       isAutoSolving: false 
     });
+    
+    // Gửi thông báo hoàn thành toàn bộ đến tất cả tabs
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        if (tab.id) {
+          chrome.tabs.sendMessage(tab.id, {
+            action: 'ALL_TASKS_COMPLETED'
+          }).catch(() => {});
+        }
+      });
+    });
+    
+    // Gửi đến popup
+    chrome.runtime.sendMessage({
+      action: 'ALL_TASKS_COMPLETED'
+    }).catch(() => {});
+    
     return;
   }
   
   const nextUrl = data.pendingTasks[0];
-  broadcastLog(`📋 Chuẩn bị mở bài tiếp theo (còn ${data.pendingTasks.length} bài)`, 'info');
   
   await chrome.storage.local.set({
     currentStatus: `Còn ${data.pendingTasks.length} bài`
   });
   
   setTimeout(() => {
-    broadcastLog(`🔗 Đang mở tab mới: ${nextUrl}`, 'info');
     chrome.tabs.create({ url: nextUrl, active: true });
-  }, 3000);
+  }, 400); // Giảm xuống chỉ 400ms để tăng tốc độ
 }
 
 // ==================== MESSAGE HANDLERS ====================
@@ -219,41 +223,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'SOLVE_PROBLEM') {
     (async () => {
       try {
-        broadcastLog('📥 Nhận yêu cầu giải bài từ content script', 'info');
-        
         const config = await chrome.storage.local.get(['baseUrl', 'apiKey', 'modelName']);
         
         if (!config.apiKey) {
-          broadcastLog('❌ Lỗi: Chưa cấu hình API Key', 'error');
+          broadcastLog('❌ Chưa cấu hình API Key', 'error');
           sendResponse({ success: false, error: 'API Key không tồn tại. Vui lòng cấu hình trong Popup.' });
           return;
         }
         
-        broadcastLog('📖 Đang đọc đề bài...', 'info');
+        // Log gọn: chỉ log bắt đầu giải
+        const problemTitle = message.problemTitle || 'Bài tập';
+        broadcastLog(`🔧 Đang giải: ${problemTitle}`, 'info');
+        
         await chrome.storage.local.set({ 
           currentStatus: `Đang giải bài...` 
         });
         
         let code;
         
-        // Nếu có baseUrl thì dùng Omniroute, không thì dùng Gemini
+        // Gọi API không log chi tiết
         if (config.baseUrl && config.baseUrl.trim()) {
-          broadcastLog(`🔧 Sử dụng Omniroute API: ${config.baseUrl}`, 'info');
           code = await solveWithOmniroute(message.problemText, {
             baseUrl: config.baseUrl,
             apiKey: config.apiKey,
             model: config.modelName || 'flash 3.8'
           });
         } else {
-          broadcastLog('🔧 Sử dụng Gemini API (mặc định)', 'info');
           code = await solveWithGemini(message.problemText, config.apiKey);
         }
         
-        broadcastLog('🎉 Code đã được generate thành công!', 'success');
+        // Log thành công
+        broadcastLog(`✅ ${problemTitle}: Code đã sẵn sàng`, 'success');
         sendResponse({ success: true, code });
         
       } catch (error) {
-        broadcastLog(`❌ Lỗi khi giải bài: ${error.message}`, 'error');
+        broadcastLog(`❌ Lỗi: ${error.message}`, 'error');
         console.error('[DLab-Bg] Error solving problem:', error);
         sendResponse({ success: false, error: error.message });
       }
@@ -265,11 +269,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'TASK_DONE') {
     (async () => {
       try {
-        broadcastLog('✅ Bài tập đã hoàn thành! Đang xử lý bài tiếp theo...', 'success');
+        // Log gọn
+        broadcastLog('✅ Bài hoàn thành', 'success');
         
         if (sender.tab?.id) {
           await chrome.tabs.remove(sender.tab.id);
-          broadcastLog('🗑️ Đã đóng tab hiện tại', 'info');
         }
         
         const { pendingTasks } = await chrome.storage.local.get(['pendingTasks']);
@@ -278,17 +282,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const updatedTasks = pendingTasks.slice(1);
           await chrome.storage.local.set({ pendingTasks: updatedTasks });
           
-          broadcastLog(`📊 Còn ${updatedTasks.length} bài trong hàng đợi`, 'info');
+          if (updatedTasks.length > 0) {
+            broadcastLog(`📊 Còn ${updatedTasks.length} bài`, 'info');
+          }
           
           await processNextTask();
         } else {
-          broadcastLog('🎊 Đã hoàn thành tất cả bài tập!', 'success');
+          broadcastLog('🎊 Hoàn thành tất cả!', 'success');
         }
         
         sendResponse({ success: true });
         
       } catch (error) {
-        broadcastLog(`❌ Lỗi khi xử lý task: ${error.message}`, 'error');
+        broadcastLog(`❌ Lỗi: ${error.message}`, 'error');
         console.error('[DLab-Bg] Error processing task completion:', error);
         sendResponse({ success: false, error: error.message });
       }

@@ -42,7 +42,7 @@ function createFloatingTerminal() {
   `;
 
   const title = document.createElement('div');
-  title.textContent = '📟 DLab Terminal';
+  title.textContent = '📟 Code PTIT Terminal';
   title.style.cssText = `
     color: #00d9ff;
     font-size: 12px;
@@ -238,10 +238,12 @@ function addTerminalLog(message, type = 'success') {
   logLine.textContent = `[${timestamp}] ${message}`;
   content.appendChild(logLine);
 
-  // Auto-scroll to bottom
-  content.scrollTop = content.scrollHeight;
+  // Tự động cuộn xuống dòng mới nhất (tối ưu, không giật lag)
+  requestAnimationFrame(() => {
+    content.scrollTop = content.scrollHeight;
+  });
 
-  // Limit to 100 lines
+  // Limit to 100 lines để tránh lag
   if (content.children.length > 100) {
     content.removeChild(content.firstChild);
   }
@@ -375,25 +377,96 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const type = request.type || 'info';
     addTerminalLog(message, type);
   }
+  
+  // Toggle Floating UI
+  if (request.action === 'TOGGLE_FLOATING_UI') {
+    const visible = request.visible;
+    const terminal = document.getElementById('dlab-floating-terminal');
+    const button = document.getElementById('dlab-auto-solve-btn');
+    
+    if (terminal) {
+      terminal.style.display = visible ? 'flex' : 'none';
+    }
+    
+    if (button) {
+      button.style.display = visible ? 'block' : 'none';
+    }
+    
+    addTerminalLog(visible ? '✅ UI nổi đã được bật' : '⚠️ UI nổi đã được tắt', visible ? 'success' : 'warning');
+  }
+  
+  // Kiểm tra hoàn thành tất cả bài tập
+  if (request.action === 'ALL_TASKS_COMPLETED') {
+    const container = document.getElementById('dlab-floating-terminal');
+    if (container) {
+      // Đổi màu viền terminal sang xanh lá để báo hiệu hoàn thành
+      container.style.borderColor = '#00ff9f';
+      container.style.boxShadow = '0 8px 32px rgba(0, 255, 159, 0.5)';
+      
+      // Animation nháy viền
+      let flashCount = 0;
+      const flashInterval = setInterval(() => {
+        container.style.borderColor = flashCount % 2 === 0 ? '#00ff9f' : '#00d9ff';
+        flashCount++;
+        if (flashCount > 6) {
+          clearInterval(flashInterval);
+          container.style.borderColor = '#00ff9f';
+        }
+      }, 300);
+    }
+    
+    addTerminalLog('🎉 HOÀN THÀNH TOÀN BỘ BÀI TẬP!', 'success');
+    addTerminalLog('✅ Tất cả bài tập đã được xử lý xong', 'success');
+  }
+  
   sendResponse({ received: true });
 });
 
 // ==================== INITIALIZATION ====================
 
 function init() {
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
+  // Kiểm tra trạng thái UI từ storage
+  chrome.storage.local.get(['floatingUIVisible'], (result) => {
+    const visible = result.floatingUIVisible !== undefined ? result.floatingUIVisible : true;
+    
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+          createFloatingTerminal();
+          createFloatingButton();
+          
+          // Áp dụng trạng thái hiển thị
+          const terminal = document.getElementById('dlab-floating-terminal');
+          const button = document.getElementById('dlab-auto-solve-btn');
+          
+          if (terminal) {
+            terminal.style.display = visible ? 'flex' : 'none';
+          }
+          
+          if (button) {
+            button.style.display = visible ? 'block' : 'none';
+          }
+        }, 1000);
+      });
+    } else {
       setTimeout(() => {
         createFloatingTerminal();
         createFloatingButton();
+        
+        // Áp dụng trạng thái hiển thị
+        const terminal = document.getElementById('dlab-floating-terminal');
+        const button = document.getElementById('dlab-auto-solve-btn');
+        
+        if (terminal) {
+          terminal.style.display = visible ? 'flex' : 'none';
+        }
+        
+        if (button) {
+          button.style.display = visible ? 'block' : 'none';
+        }
       }, 1000);
-    });
-  } else {
-    setTimeout(() => {
-      createFloatingTerminal();
-      createFloatingButton();
-    }, 1000);
-  }
+    }
+  });
 }
 
 init();

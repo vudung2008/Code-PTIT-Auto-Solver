@@ -4,11 +4,15 @@ const modelNameInput = document.getElementById('modelName');
 const saveBtn = document.getElementById('saveBtn');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
+const toggleUIBtn = document.getElementById('toggleUIBtn');
+const toggleIcon = document.getElementById('toggleIcon');
+const toggleText = document.getElementById('toggleText');
 const clearBtn = document.getElementById('clearBtn');
 const messageDiv = document.getElementById('message');
 const terminal = document.getElementById('terminal');
 
 let autoScrollEnabled = true;
+let floatingUIVisible = true;
 
 function showMessage(text, type) {
   messageDiv.textContent = text;
@@ -47,7 +51,7 @@ function clearTerminal() {
 }
 
 function loadConfig() {
-  chrome.storage.local.get(['baseUrl', 'apiKey', 'modelName'], (result) => {
+  chrome.storage.local.get(['baseUrl', 'apiKey', 'modelName', 'floatingUIVisible'], (result) => {
     if (result.baseUrl) {
       baseUrlInput.value = result.baseUrl;
     }
@@ -59,6 +63,15 @@ function loadConfig() {
     } else {
       modelNameInput.value = 'flash 3.8';
     }
+    
+    // Load trạng thái UI nổi
+    if (result.floatingUIVisible !== undefined) {
+      floatingUIVisible = result.floatingUIVisible;
+    } else {
+      floatingUIVisible = true; // Mặc định bật
+    }
+    
+    updateToggleButton();
     
     addLog('Config loaded from storage', 'info');
   });
@@ -117,6 +130,46 @@ stopBtn.addEventListener('click', () => {
 });
 
 clearBtn.addEventListener('click', clearTerminal);
+
+// Toggle Floating UI
+function updateToggleButton() {
+  if (floatingUIVisible) {
+    toggleIcon.textContent = '👁️';
+    toggleText.textContent = 'Ẩn UI Nổi';
+    toggleUIBtn.classList.remove('off');
+  } else {
+    toggleIcon.textContent = '🙈';
+    toggleText.textContent = 'Hiện UI Nổi';
+    toggleUIBtn.classList.add('off');
+  }
+}
+
+toggleUIBtn.addEventListener('click', () => {
+  floatingUIVisible = !floatingUIVisible;
+  
+  // Lưu trạng thái
+  chrome.storage.local.set({ floatingUIVisible }, () => {
+    updateToggleButton();
+    
+    // Gửi message đến tất cả tabs để toggle UI
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'TOGGLE_FLOATING_UI',
+          visible: floatingUIVisible
+        }).catch(() => {});
+      });
+    });
+    
+    if (floatingUIVisible) {
+      addLog('Đã bật UI nổi trên tất cả tabs', 'success');
+      showMessage('Đã bật UI nổi!', 'success');
+    } else {
+      addLog('Đã tắt UI nổi trên tất cả tabs', 'warning');
+      showMessage('Đã tắt UI nổi!', 'success');
+    }
+  });
+});
 
 terminal.addEventListener('scroll', () => {
   const isScrolledToBottom = terminal.scrollHeight - terminal.scrollTop <= terminal.clientHeight + 10;

@@ -25,7 +25,7 @@
     },
     {
       "matches": ["*://*/submit/*"],
-      "js": ["content-submit.js", "problem_solver.js"],
+      "js": ["content-submit.js", "problem_solver_v2.js"],
       "run_at": "document_end"
     }
   ]
